@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import Features from "./pages/Features";
 import Cases from "./pages/Cases";
+import Users from "./pages/Users";
 import "./App.css";
 
 const router = createBrowserRouter([
@@ -27,6 +28,10 @@ const router = createBrowserRouter([
             { 
                 path: "cases", 
                 element: <Cases /> 
+            },
+            { 
+                path: "users", 
+                element: <Users /> 
             },
         ]
     }

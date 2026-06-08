@@ -9,6 +9,7 @@ function Sidebar(){
             <Link to='/about'><FiInfo /> About</Link>
             <Link to='/features'><FiStar /> Features</Link>
             <Link to='/cases'><FiStar /> Cases</Link>
+            <Link to='/users'><FiStar /> Users</Link>
 
         </div>
         

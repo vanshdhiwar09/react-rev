@@ -4,12 +4,27 @@ import { FaBoxArchive } from "react-icons/fa6";
 import { TbAlertSquare } from "react-icons/tb";
 
 function Cases() {
-    // 1. Set up State for real data
+    // 1. Core Data State
     const [tableData, setTableData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    
+    // 2. DRAFT Filter States (What the dropdowns show)
+    const [selectedStatus, setSelectedStatus] = useState("ALL");
+    const [selectedType, setSelectedType] = useState("ALL");
+    const [selectedPriority, setSelectedPriority] = useState("ALL");
 
-    // 2. Fetch Data when the component loads
+    // 3. APPLIED Filter States (What actually filters the table)
+    const [appliedStatus, setAppliedStatus] = useState("ALL");
+    const [appliedType, setAppliedType] = useState("ALL");
+    const [appliedPriority, setAppliedPriority] = useState("ALL");
+    const [searchQuery, setSearchQuery] = useState("");
+
+    // 4. Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5;
+
+    // Fetch Data
     useEffect(() => {
         const fetchCases = async () => {
             try {
@@ -29,8 +44,6 @@ function Cases() {
                 }
 
                 const data = await response.json();
-                
-                // EXTRACT THE ARRAY: Point exactly to the 'case_details' array in the response
                 setTableData(data.case_details || []); 
                 
             } catch (err) {
@@ -44,10 +57,62 @@ function Cases() {
         fetchCases();
     }, []);
 
-    // SAFETY NET: Ensure validData is always an array to prevent .length crashes
-    const validData = Array.isArray(tableData) ? tableData : [];
+    // THE BUTTON HANDLER: Syncs the Draft state to the Applied state
+    const handleApplyFilters = () => {
+        setAppliedStatus(selectedStatus);
+        setAppliedType(selectedType);
+        setAppliedPriority(selectedPriority);
+        // Important: Always reset to page 1 when new filters are applied!
+        setCurrentPage(1); 
+    };
 
-    // 3. Dynamically calculate stats based on the valid data
+    // SAFETY NET: Ensure validData is always an array
+    const validData = Array.isArray(tableData) ? tableData : [];
+    
+    // FILTER LOGIC: Now uses the APPLIED states, not the selected states!
+    // FILTER LOGIC
+    const filteredData = validData.filter((caseItem) => {
+        const normalizeString = (str) => {
+            if (!str) return "";
+            return str.toString().toUpperCase().replace(/_/g, ' ').replace(/['"]/g, '').trim();
+        };
+
+        // THE ULTIMATE FIX: We manually build the date string so the browser can't mess with the slashes
+        const getFormattedDate = (dateString) => {
+            if (!dateString) return "";
+            const d = new Date(dateString);
+            const month = String(d.getMonth() + 1).padStart(2, '0'); // Forces 2 digits (e.g. '10')
+            const day = String(d.getDate()).padStart(2, '0');       // Forces 2 digits (e.g. '03')
+            const year = d.getFullYear();                           // '2025'
+            
+            return `${month}/${day}/${year}`; // Guarantees "10/03/2025"
+        };
+
+        const matchesStatus = appliedStatus === "ALL" || normalizeString(caseItem.status) === normalizeString(appliedStatus);
+        const matchesPriority = appliedPriority === "ALL" || normalizeString(caseItem.priority) === normalizeString(appliedPriority);
+        const matchesType = appliedType === "ALL" || normalizeString(caseItem.type) === normalizeString(appliedType);
+
+        const cleanSearch = normalizeString(searchQuery);
+        const safeDateString = getFormattedDate(caseItem.creation_date_time);
+
+        const matchesSearch = cleanSearch === "" || 
+            normalizeString(caseItem.case_Id).includes(cleanSearch) ||
+            normalizeString(caseItem.name).includes(cleanSearch) ||
+            normalizeString(caseItem.case_number).includes(cleanSearch) ||
+            normalizeString(caseItem.location).includes(cleanSearch) ||
+            normalizeString(caseItem.assigned_investigator?.join(' ')).includes(cleanSearch) ||
+            safeDateString.includes(cleanSearch); // Now securely checking "10/03/2025"
+
+        return matchesStatus && matchesPriority && matchesType && matchesSearch; 
+    });
+
+
+    // PAGINATION LOGIC: Slice the filtered data to only show 10 items
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const currentTableData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+    // Stats based on FULL data
     const stats = [
         { 
             title: "TOTAL CASES", 
@@ -58,7 +123,6 @@ function Cases() {
         },
         { 
             title: "ACTIVE INVESTIGATIONS", 
-            // Look for 'OPEN' to match your API's status terminology
             number: validData.filter(c => c.status?.toUpperCase() === 'OPEN').length.toString().padStart(2, '0'), 
             description: "Under active review", 
             icon: MdOutlineRocketLaunch, 
@@ -80,7 +144,6 @@ function Cases() {
         }
     ];
 
-    // Keep Activity Feed as mock data for now
     const activityFeed = [
         { id: 1, text: "Officer Miller updated Case #EV-2024-00124", time: "15 minutes ago" },
         { id: 2, text: "Lab Report attached to Case #EV-2024-00125", time: "2 hours ago" },
@@ -119,24 +182,63 @@ function Cases() {
 
             {/* Main Content Area */}
             <div className="main-content">
-                
-                {/* Left Side: Table & Filters */}
                 <div className="table-section">
                     
+                    {/* Filters */}
                     {/* Filters */}
                     <div className="filters-bar">
                         <div className="filter-group">
                             <span className="filter-label">FILTER BY:</span>
-                            <select><option>All Case Types</option></select>
-                            <select><option>All Statuses</option></select>
-                            <select><option>Date Range</option></select>
+                            
+                            <select 
+                                value={selectedType}
+                                onChange={(e) => setSelectedType(e.target.value)}
+                            >
+                                <option value="ALL">All Case Types</option>
+                                <option value="CRIMINAL">Criminal</option>
+                                <option value="INTELLIGENCE_GATHERING">Intelligence Gathering</option>
+                                <option value="survelliance">survelliance</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+
+                            <select
+                                value={selectedStatus}
+                                onChange={(e) => setSelectedStatus(e.target.value)}
+                            >
+                                <option value="ALL">All Statuses</option>
+                                <option value="OPEN">Open</option>
+                                <option value="CLOSED">Closed</option>
+                            </select>
+
+                            <select 
+                                value={selectedPriority}
+                                onChange={(e)=> setSelectedPriority(e.target.value)}
+                            >
+                                <option value="ALL">All Priorities</option>
+                                <option value="HIGH">High</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="LOW">Low</option>
+                            </select>
+
+                            {/* THE FIX: Moved the Apply button here and removed Advanced Filters */}
+                            <button className="btn-apply" onClick={handleApplyFilters}>
+                                Apply
+                            </button>
                         </div>
-                        <div className="filter-actions">
-                            <button className="btn-text">Advanced Filters</button>
-                            <button className="btn-apply">Apply Filters</button>
+                        {/* RIGHT SIDE: Instant Search Bar */}
+                        <div className="search-container">
+                            <input 
+                                type="text" 
+                                className="search-input"
+                                placeholder="Search ID , Name    " 
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setCurrentPage(1); // <-- Instantly snaps to page 1 while typing
+                                }}
+                            />
                         </div>
                     </div>
-
                     {/* Table */}
                     <div className="table-container">
                         <table>
@@ -151,26 +253,27 @@ function Cases() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {/* Conditional Rendering based on fetch state */}
                                 {isLoading ? (
                                     <tr><td colSpan="6" style={{textAlign: "center", padding: "20px"}}>Loading data...</td></tr>
                                 ) : error ? (
                                     <tr><td colSpan="6" style={{textAlign: "center", padding: "20px", color: "red"}}>Error: {error}</td></tr>
-                                ) : validData.length === 0 ? (
+                                ) : currentTableData.length === 0 ? (
                                     <tr><td colSpan="6" style={{textAlign: "center", padding: "20px"}}>No cases found.</td></tr>
                                 ) : (
-                                    validData.map((row, index) => {
-                                        // 1. Clean up the date string
-                                        const cleanDate = new Date(row.creation_date_time).toLocaleDateString();
+                                    /* MAPPING OVER currentTableData (the sliced 10 items) instead of filteredData */
+                                    
+                                        currentTableData.map((row, index) => {
+                                        // THE FIX: Added 'en-GB' here so the table explicitly uses slashes too
+                                        const d = new Date(row.creation_date_time);
+                                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                        const dd = String(d.getDate()).padStart(2, '0');
+                                        const cleanDate = `${mm}/${dd}/${d.getFullYear()}`;
                                         
-                                        // 2. Format the assigned investigator array
                                         const investigatorText = row.assigned_investigator && row.assigned_investigator.length > 0 
                                             ? row.assigned_investigator.join(', ') 
                                             : "Unassigned";
-
                                         return (
                                             <tr key={index}>
-                                                {/* Use your exact API keys here */}
                                                 <td className="monospace">{row.case_Id}</td>
                                                 <td className="fw-500">{row.name}</td>
                                                 <td>
@@ -194,18 +297,43 @@ function Cases() {
                         </table>
                     </div>
 
-                    {/* Pagination */}
+                    {/* Dynamic Pagination */}
                     <div className="pagination-bar">
                         <span className="showing-text">
-                            Showing {validData.length > 0 ? 1 : 0}-{Math.min(10, validData.length)} of {validData.length} results
+                            Showing {filteredData.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + itemsPerPage, filteredData.length)} of {filteredData.length} results
                         </span>
-                        <div className="pagination-controls">
-                            <button className="page-btn">&lt;</button>
-                            <button className="page-btn active">1</button>
-                            <button className="page-btn">2</button>
-                            <button className="page-btn">3</button>
-                            <button className="page-btn">&gt;</button>
-                        </div>
+                        
+                        {/* Only show controls if we have more than 1 page */}
+                        {totalPages > 1 && (
+                            <div className="pagination-controls">
+                                <button 
+                                    className="page-btn" 
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    &lt;
+                                </button>
+                                
+                                {/* Generate page number buttons dynamically */}
+                                {Array.from({ length: totalPages }, (_, i) => (
+                                    <button 
+                                        key={i + 1} 
+                                        className={`page-btn ${currentPage === i + 1 ? "active" : ""}`}
+                                        onClick={() => setCurrentPage(i + 1)}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+
+                                <button 
+                                    className="page-btn" 
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    &gt;
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
