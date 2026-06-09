@@ -16,7 +16,7 @@ function Users() {
 
     // 3. Pagination State
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 5; 
+    const itemsPerPage = 5 ; 
     // ==========================================
     // 4. MODAL & POST API STATE
     // ==========================================
@@ -30,54 +30,96 @@ function Users() {
         name: '',
         email: '',
         password: '',
-        role_id: 2, // Defaulting to 2 (Investigator)
+        role_id: '2', // Defaulting to 2 (Investigator)
         location: ''
     });
-
+    const [formErrors, setFormErrors] = useState({});
+    
+    
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // ==========================================
+    // CREATE NEW USER (POST API)
+    // ==========================================
     const handleSubmitNewUser = async (e) => {
         e.preventDefault();
-        setIsSubmitting(true);
+        
+        // 1. INLINE VALIDATION ENGINE
+        const errors = {};
+        
+        if (!formData.name.trim()) errors.name = "Full name is required.";
+        if (!formData.username.trim()) errors.username = "User tag is required.";
+        
+        if (!formData.email.trim()) {
+            errors.email = "Official email is required.";
+        } else if (!formData.email.includes('@')) {
+            errors.email = "Email must contain an '@' symbol.";
+        }
+
+        if (!formData.password) {
+            errors.password = "Password is required.";
+        } else if (formData.password.length < 8) {
+            errors.password = "Password must be at least 8 characters long.";
+        }
+
+        if (!formData.location.trim()) errors.location = "Base location is required.";
+
+        // If there are errors, update the UI and STOP the submission
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
+            return; 
+        }
+
+        // Clear errors if everything is good
+        setFormErrors({});
 
         try {
-            // NOTE: Make sure this points to your specific POST/Create endpoint if it differs from the GET url
-            const apiUrl = import.meta.env.VITE_API_URL_CREATE; 
+            const createApiUrl = import.meta.env.VITE_API_URL_CREATE; 
             const apiKey = import.meta.env.VITE_API_KEY;
 
-            // Ensure role_id is sent as an actual number, not a string from the dropdown
-            const payload = {
-                ...formData,
-                role_id: parseInt(formData.role_id, 10) 
-            };
-
-            const response = await fetch(apiUrl, {
+            const response = await fetch(createApiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+                    'Authorization': `Bearer ${apiKey}` 
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    username: formData.username,
+                    name: formData.name,
+                    email: formData.email,
+                    password: formData.password,
+                    role_id: parseInt(formData.role_id) || 2,
+                    location: formData.location
+                })
             });
 
             if (!response.ok) {
-                throw new Error('Failed to create investigator. Please check your permissions.');
+                const errorPayload = await response.json().catch(() => ({})); 
+                // If the backend rejects it, apply that error directly to the form
+                if (errorPayload.message) {
+                    const backendError = typeof errorPayload.message === 'object' 
+                        ? Object.values(errorPayload.message)[0] 
+                        : errorPayload.message;
+                    // Put backend errors at the top of the form
+                    setFormErrors({ backend: backendError }); 
+                }
+                return;
             }
 
-            // Optional: If you have a fetchUsers() function, you can call it here to refresh the table instantly!
-            
-            // On success: Close modal and reset form
+            const responseData = await response.json();
+            const newUser = responseData.data || responseData; 
+
+            setUsersData(prevUsers => [...prevUsers, newUser]);
             setIsModalOpen(false);
-            setFormData({ username: '', name: '', email: '', password: '', role_id: 2, location: '' });
-            
+            setFormData({ name: '', email: '', username: '', password: '', role_id: '2', location: '' });
+            setFormErrors({}); // Reset errors on success
+
         } catch (err) {
-            console.error("Submission Error:", err);
-            alert("Error: " + err.message); // Simple alert for now, can be upgraded to a toast notification later
-        } finally {
-            setIsSubmitting(false);
+            console.error(err);
+            setFormErrors({ backend: "Network error. Please try again." });
         }
     };
     // ==========================================
@@ -130,11 +172,23 @@ function Users() {
     const validData = Array.isArray(usersData) ? usersData : [];
 
     // SMART STATUS HELPER: Calculates status if the API doesn't provide it
+    // SMART STATUS HELPER: Calculates status safely
     const getUserStatus = (user) => {
-        if (user.status) return user.status.toUpperCase(); // Uses real status if API adds it later
-        if (user.role?.toLowerCase() === 'admin') return 'DUTY HEAD';
-        if (user.location?.toLowerCase() === 'india') return 'AVAILABLE';
-        if (['cuba', 'peru'].includes(user.location?.toLowerCase())) return 'ON LEAVE'; // Mocking leave
+        // 1. If status exists AND is a string, make it uppercase
+        if (user.status && typeof user.status === 'string') {
+            return user.status.toUpperCase();
+        }
+        
+        // 2. Safely check the role (handles if role is null or a number)
+        const roleStr = user.role ? String(user.role).toLowerCase() : '';
+        if (roleStr === 'admin' || user.role_id === 1) return 'DUTY HEAD';
+
+        // 3. Safely check the location
+        const locStr = user.location ? String(user.location).toLowerCase() : '';
+        if (locStr.includes('india') || locStr.includes('mumbai')) return 'AVAILABLE';
+        if (['cuba', 'peru'].includes(locStr)) return 'ON LEAVE'; 
+
+        // 4. Default fallback
         return 'ACTIVE';
     };
 
@@ -397,46 +451,93 @@ function Users() {
                             <button className="btn-close-modal" onClick={() => setIsModalOpen(false)}>×</button>
                         </div>
 
-                        <form onSubmit={handleSubmitNewUser}>
+                        <form onSubmit={handleSubmitNewUser} noValidate>
                             <div className="modal-body">
                                 
+                                {/* Show backend server errors at the top if they happen */}
+                                {formErrors.backend && <div className="backend-error-alert">{formErrors.backend}</div>}
+
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>Full Name</label>
-                                        <input type="text" name="name" value={formData.name} onChange={handleInputChange} required placeholder="e.g. Vansh" />
+                                        <input 
+                                            type="text" name="name" value={formData.name} onChange={handleInputChange} 
+                                            className={formErrors.name ? 'error-input' : ''} 
+                                            placeholder="e.g. John Doe" 
+                                        />
+                                        {formErrors.name && <span className="error-text">{formErrors.name}</span>}
                                     </div>
                                     <div className="form-group">
                                         <label>User Tag</label>
-                                        <input type="text" name="username" value={formData.username} onChange={handleInputChange} required placeholder="e.g. Vansh_90" />
+                                        <input 
+                                            type="text" name="username" value={formData.username} onChange={handleInputChange} 
+                                            className={formErrors.username ? 'error-input' : ''} 
+                                            placeholder="e.g. john_d" 
+                                        />
+                                        {formErrors.username && <span className="error-text">{formErrors.username}</span>}
                                     </div>
                                 </div>
 
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>Official Email</label>
-                                        <input type="email" name="email" value={formData.email} onChange={handleInputChange} required placeholder="Vansh.j@india.in" />
+                                        <input 
+                                            type="email" name="email" value={formData.email} onChange={handleInputChange} 
+                                            className={formErrors.email ? 'error-input' : ''} 
+                                            placeholder="john.doe@agency.gov" 
+                                        />
+                                        {formErrors.email && <span className="error-text">{formErrors.email}</span>}
                                     </div>
+                                    
                                     <div className="form-group">
-                                        <label>Secure Password</label>
-                                        <input type="password" name="password" value={formData.password} onChange={handleInputChange} required placeholder="••••••••" />
+                                        <label>Password</label>
+                                        <div className="password-input-wrapper">
+                                            <input 
+                                                type={showPassword ? "text" : "password"} 
+                                                name="password" value={formData.password} onChange={handleInputChange} 
+                                                className={formErrors.password ? 'error-input' : ''} 
+                                                placeholder="Set default password" 
+                                            />
+                                            <button 
+                                                type="button" 
+                                                className="btn-toggle-password"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                title={showPassword ? "Hide Password" : "Show Password"}
+                                            >
+                                                {showPassword ? (
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                                                    </svg>
+                                                ) : (
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                        <circle cx="12" cy="12" r="3"></circle>
+                                                    </svg>
+                                                )}
+                                            </button>
+                                        </div>
+                                        {formErrors.password && <span className="error-text">{formErrors.password}</span>}
                                     </div>
                                 </div>
 
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>Assigned Role</label>
-                                        {/* Values are numbers to match your API's role_id expectation */}
                                         <select name="role_id" value={formData.role_id} onChange={handleInputChange}>
-                                            <option value={1}> Investigator</option>
-                                            <option value={1}> Officer</option>
-                                            <option value={1}> Admin</option>
-
-                                            
+                                            <option value="1">Admin</option>
+                                            <option value="2">Investigator</option>
+                                            <option value="3">Officer</option>
                                         </select>
                                     </div>
                                     <div className="form-group">
                                         <label>Base Location</label>
-                                        <input type="text" name="location" value={formData.location} onChange={handleInputChange} required placeholder="e.g. United States of India" />
+                                        <input 
+                                            type="text" name="location" value={formData.location} onChange={handleInputChange} 
+                                            className={formErrors.location ? 'error-input' : ''} 
+                                            placeholder="e.g. United Kingdom" 
+                                        />
+                                        {formErrors.location && <span className="error-text">{formErrors.location}</span>}
                                     </div>
                                 </div>
 
@@ -455,6 +556,7 @@ function Users() {
                     </div>
                 </div>
             )}
+            
         </div>
     );
 }

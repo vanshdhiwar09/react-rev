@@ -1406,3 +1406,63 @@
     font-size: 12px;
     margin-top: 4px;
 }
+/* --- INLINE FORM ERRORS --- */
+.users-dashboard .form-group input.error-input,
+.users-dashboard .form-group select.error-input {
+    border-color: #ef4444;
+    background-color: #fef2f2; /* Very faint red background */
+}
+
+.users-dashboard .form-group input.error-input:focus,
+.users-dashboard .form-group select.error-input:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15); /* Red focus glow */
+}
+
+.users-dashboard .error-text {
+    color: #ef4444;
+    font-size: 10px;
+    font-weight: 600;
+    margin-top: 4px;
+    display: block;
+}
+
+.users-dashboard .backend-error-alert {
+    background-color: #fef2f2;
+    color: #991b1b;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border-left: 4px solid #ef4444;
+    margin-bottom: 16px;
+}
+
+/* --- PASSWORD SHOW/HIDE TOGGLE --- */
+.users-dashboard .password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.users-dashboard .password-input-wrapper input {
+    width: 100%;
+    padding-right: 50px; /* Space so text doesn't hide behind the button */
+}
+
+.users-dashboard .btn-toggle-password {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px;
+}
+
+.users-dashboard .btn-toggle-password:hover {
+    color: #0f172a;
+}
