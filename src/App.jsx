@@ -4,8 +4,11 @@ import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Features from "./pages/Features";
-import Cases from "./pages/Cases";
-import Users from "./pages/Users";
+
+// 1. IMPORT THE LOADERS ALONGSIDE THE COMPONENTS
+import Cases, { casesLoader } from "./pages/Cases"; 
+import Users, { usersLoader } from "./pages/Users"; 
+
 import "./App.css";
 
 const router = createBrowserRouter([
@@ -18,7 +21,7 @@ const router = createBrowserRouter([
                 element: <Home /> 
             }, 
             { 
-                path: "about", // No need for leading slashes in children
+                path: "about", 
                 element: <About /> 
             },
             { 
@@ -27,11 +30,13 @@ const router = createBrowserRouter([
             },
             { 
                 path: "cases", 
-                element: <Cases /> 
+                element: <Cases />,
+                loader: casesLoader // 2. ATTACH THE CASES LOADER HERE
             },
             { 
                 path: "users", 
-                element: <Users /> 
+                element: <Users />,
+                loader: usersLoader // 3. ATTACH THE USERS LOADER HERE
             },
         ]
     }
@@ -42,4 +47,3 @@ function App() {
 }
 
 export default App;
-

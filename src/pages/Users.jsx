@@ -1,13 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useLoaderData } from 'react-router-dom';
 import { FiSearch, FiFilter, FiEye, FiEdit2 } from "react-icons/fi";
 import {HiOutlineUserGroup,HiOutlineStar, HiOutlineClipboardDocumentCheck, HiOutlineUser} from "react-icons/hi2";
+//loader function
+// NEW BULLETPROOF LOADER (Users.jsx)
+export const usersLoader = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL_USERS;
+    const apiKey = import.meta.env.VITE_API_KEY;
+    
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}` 
+            }
+        });
+
+        // THE FIX: Check if the server actually sent JSON before trying to parse it!
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            console.error("Oops! API returned HTML instead of JSON. Check your API URL:", apiUrl);
+            return []; // Return an empty array so the table just shows "No data" instead of crashing
+        }
+
+        if (!response.ok) throw new Error('Failed to fetch user directory');
+        
+        const jsonResponse = await response.json();
+        return jsonResponse.data || []; 
+
+    } catch (error) {
+        console.error("Loader Error:", error);
+        return []; // Fallback gracefully if the network completely fails
+    }
+};
+
 
 function Users() {
-    // 1. Core Data State
-    const [usersData, setUsersData] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-
+    // 1. Core Data State (Powered by React Router Loader)
+    const initialUsers = useLoaderData();
+    const [usersData, setUsersData] = useState(initialUsers || []);
+    
     // 2. Search & Filter States
   
     const [searchQuery, setSearchQuery] = useState(""); 
@@ -122,43 +155,7 @@ function Users() {
             setFormErrors({ backend: "Network error. Please try again." });
         }
     };
-    // ==========================================
-    // API FETCH LOGIC
-    // ==========================================
-    useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                const apiUrl = import.meta.env.VITE_API_URL_USERS;
-                const apiKey = import.meta.env.VITE_API_KEY;
-                
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}` 
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to fetch user directory from server.');
-                }
-
-                const jsonResponse = await response.json();
-                
-                // Matches your API key path: jsonResponse.data
-                setUsersData(jsonResponse.data || []); 
-                
-            } catch (err) {
-                console.error("API Error:", err);
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchUsers();
-    }, []);
-
+  
     // ==========================================
     // FILTER & SEARCH PROCESSING Pipeline
     // ==========================================
@@ -349,11 +346,8 @@ function Users() {
                         </tr>
                     </thead>
                     <tbody>
-                        {isLoading ? (
-                            <tr><td colSpan="6" style={{textAlign: "center", padding: "32px"}}>Initializing secure directory...</td></tr>
-                        ) : error ? (
-                            <tr><td colSpan="6" style={{textAlign: "center", padding: "32px", color: "#ef4444"}}>Transmission Error: {error}</td></tr>
-                        ) : currentTableData.length === 0 ? (
+                        {/* NEW CLEANED UP TABLE RENDERER FOR USERS */}
+                        {currentTableData.length === 0 ? (
                             <tr><td colSpan="6" style={{textAlign: "center", padding: "32px"}}>No personnel records match criteria.</td></tr>
                         ) : (
                             currentTableData.map((user, index) => {

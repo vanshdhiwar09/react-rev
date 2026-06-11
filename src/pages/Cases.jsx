@@ -1,13 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useLoaderData } from 'react-router-dom';
 import { MdOutlineRocketLaunch, MdFileDownloadDone } from "react-icons/md";
 import { FaBoxArchive } from "react-icons/fa6";
 import { TbAlertSquare } from "react-icons/tb";
+//loader function
+// NEW BULLETPROOF LOADER (Cases.jsx)
+export const casesLoader = async () => {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    const apiKey = import.meta.env.VITE_API_KEY;
+    
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}` 
+            }
+        });
 
+        // THE FIX: Check if the server actually sent JSON before trying to parse it!
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            console.error("Oops! API returned HTML instead of JSON. Check your API URL:", apiUrl);
+            return []; // Return an empty array so the table just shows "No data" instead of crashing
+        }
+
+        if (!response.ok) throw new Error('Failed to fetch cases data');
+        
+        const jsonResponse = await response.json();
+        if (Array.isArray(jsonResponse)) {
+            return jsonResponse;
+        }
+        if (Array.isArray(jsonResponse.data)) {
+            return jsonResponse.data;
+        }
+        if (Array.isArray(jsonResponse.case_details)) {
+            return jsonResponse.case_details;
+        }
+        if (Array.isArray(jsonResponse.cases)) {
+            return jsonResponse.cases;
+        }
+        if (Array.isArray(jsonResponse.result)) {
+            return jsonResponse.result;
+        }
+
+        console.warn("Unexpected cases API response shape:", jsonResponse);
+        return [];
+
+    } catch (error) {
+        console.error("Loader Error:", error);
+        return []; // Fallback gracefully if the network completely fails
+    }
+};
 function Cases() {
-    // 1. Core Data State
-    const [tableData, setTableData] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    
+    
+    // 1. Core Data State (Powered by React Router Loader)
+    const initialCases = useLoaderData();
+    const [tableData, setTableData] = useState(initialCases || []);
+    
     
     // 2. DRAFT Filter States (What the dropdowns show)
     const [selectedStatus, setSelectedStatus] = useState("ALL");
@@ -24,39 +75,7 @@ function Cases() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 5;
 
-    // Fetch Data
-    useEffect(() => {
-        const fetchCases = async () => {
-            try {
-                const apiUrl = import.meta.env.VITE_API_URL;
-                const apiKey = import.meta.env.VITE_API_KEY;
-                
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}` 
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to fetch cases from the server.');
-                }
-
-                const data = await response.json();
-                setTableData(data.case_details || []); 
-                
-            } catch (err) {
-                console.error("API Error:", err);
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchCases();
-    }, []);
-
+   
     // THE BUTTON HANDLER: Syncs the Draft state to the Applied state
     const handleApplyFilters = () => {
         setAppliedStatus(selectedStatus);
@@ -253,16 +272,12 @@ function Cases() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {isLoading ? (
-                                    <tr><td colSpan="6" style={{textAlign: "center", padding: "20px"}}>Loading data...</td></tr>
-                                ) : error ? (
-                                    <tr><td colSpan="6" style={{textAlign: "center", padding: "20px", color: "red"}}>Error: {error}</td></tr>
-                                ) : currentTableData.length === 0 ? (
+                               {/* NEW CLEANED UP TABLE RENDERER */}
+                                {currentTableData.length === 0 ? (
                                     <tr><td colSpan="6" style={{textAlign: "center", padding: "20px"}}>No cases found.</td></tr>
                                 ) : (
                                     /* MAPPING OVER currentTableData (the sliced 10 items) instead of filteredData */
-                                    
-                                        currentTableData.map((row, index) => {
+                                    currentTableData.map((row, index) => {
                                         // THE FIX: Added 'en-GB' here so the table explicitly uses slashes too
                                         const d = new Date(row.creation_date_time);
                                         const mm = String(d.getMonth() + 1).padStart(2, '0');
