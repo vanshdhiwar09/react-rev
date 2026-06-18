@@ -1,38 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLoaderData } from 'react-router-dom';
 import { FiSearch, FiFilter, FiEye, FiEdit2 } from "react-icons/fi";
 import {HiOutlineUserGroup,HiOutlineStar, HiOutlineClipboardDocumentCheck, HiOutlineUser} from "react-icons/hi2";
 //loader function
 // NEW BULLETPROOF LOADER (Users.jsx)
 export const usersLoader = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL_USERS;
-    const apiKey = import.meta.env.VITE_API_KEY;
-    
-    try {
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}` 
-            }
-        });
-
-        // THE FIX: Check if the server actually sent JSON before trying to parse it!
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            console.error("Oops! API returned HTML instead of JSON. Check your API URL:", apiUrl);
-            return []; // Return an empty array so the table just shows "No data" instead of crashing
-        }
-
-        if (!response.ok) throw new Error('Failed to fetch user directory');
-        
-        const jsonResponse = await response.json();
-        return jsonResponse.data || []; 
-
-    } catch (error) {
-        console.error("Loader Error:", error);
-        return []; // Fallback gracefully if the network completely fails
-    }
+    // Keep useLoaderData available, but allow immediate route rendering.
+    return [];
 };
 
 
@@ -40,6 +14,50 @@ function Users() {
     // 1. Core Data State (Powered by React Router Loader)
     const initialUsers = useLoaderData();
     const [usersData, setUsersData] = useState(initialUsers || []);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
+
+    useEffect(() => {
+        let active = true;
+        const apiUrl = import.meta.env.VITE_API_URL_USERS;
+        const apiKey = import.meta.env.VITE_API_KEY;
+
+        const fetchUsers = async () => {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Users API returned ${response.status}`);
+                }
+
+                const jsonResponse = await response.json();
+                const items = Array.isArray(jsonResponse.data) ? jsonResponse.data : (Array.isArray(jsonResponse) ? jsonResponse : []);
+
+                if (active) {
+                    setUsersData(items);
+                    setLoadError(null);
+                }
+            } catch (error) {
+                if (active) {
+                    setLoadError(error.message || "Unable to load users");
+                }
+                console.error("Users loader error:", error);
+            } finally {
+                if (active) setIsLoading(false);
+            }
+        };
+
+        fetchUsers();
+        return () => {
+            active = false;
+        };
+    }, []);
     
     // 2. Search & Filter States
   

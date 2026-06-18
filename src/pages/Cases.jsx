@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLoaderData } from 'react-router-dom';
 import { MdOutlineRocketLaunch, MdFileDownloadDone } from "react-icons/md";
 import { FaBoxArchive } from "react-icons/fa6";
@@ -6,51 +6,8 @@ import { TbAlertSquare } from "react-icons/tb";
 //loader function
 // NEW BULLETPROOF LOADER (Cases.jsx)
 export const casesLoader = async () => {
-    const apiUrl = import.meta.env.VITE_API_URL;
-    const apiKey = import.meta.env.VITE_API_KEY;
-    
-    try {
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}` 
-            }
-        });
-
-        // THE FIX: Check if the server actually sent JSON before trying to parse it!
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            console.error("Oops! API returned HTML instead of JSON. Check your API URL:", apiUrl);
-            return []; // Return an empty array so the table just shows "No data" instead of crashing
-        }
-
-        if (!response.ok) throw new Error('Failed to fetch cases data');
-        
-        const jsonResponse = await response.json();
-        if (Array.isArray(jsonResponse)) {
-            return jsonResponse;
-        }
-        if (Array.isArray(jsonResponse.data)) {
-            return jsonResponse.data;
-        }
-        if (Array.isArray(jsonResponse.case_details)) {
-            return jsonResponse.case_details;
-        }
-        if (Array.isArray(jsonResponse.cases)) {
-            return jsonResponse.cases;
-        }
-        if (Array.isArray(jsonResponse.result)) {
-            return jsonResponse.result;
-        }
-
-        console.warn("Unexpected cases API response shape:", jsonResponse);
-        return [];
-
-    } catch (error) {
-        console.error("Loader Error:", error);
-        return []; // Fallback gracefully if the network completely fails
-    }
+    // Keep useLoaderData available, but allow immediate route rendering.
+    return [];
 };
 function Cases() {
     
@@ -58,7 +15,64 @@ function Cases() {
     // 1. Core Data State (Powered by React Router Loader)
     const initialCases = useLoaderData();
     const [tableData, setTableData] = useState(initialCases || []);
-    
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
+
+    useEffect(() => {
+        let active = true;
+        const apiUrl = import.meta.env.VITE_API_URL;
+        const apiKey = import.meta.env.VITE_API_KEY;
+
+        const fetchCases = async () => {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Cases API returned ${response.status}`);
+                }
+
+                const jsonResponse = await response.json();
+                let items = [];
+                if (Array.isArray(jsonResponse)) {
+                    items = jsonResponse;
+                } else if (Array.isArray(jsonResponse.case_details)) {
+                    items = jsonResponse.case_details;
+                } else if (Array.isArray(jsonResponse.data)) {
+                    items = jsonResponse.data;
+                } else if (Array.isArray(jsonResponse.cases)) {
+                    items = jsonResponse.cases;
+                } else if (Array.isArray(jsonResponse.result)) {
+                    items = jsonResponse.result;
+                } else {
+                    console.warn("Unexpected cases API response shape:", jsonResponse);
+                }
+
+                if (active) {
+                    setTableData(items);
+                    setLoadError(null);
+                }
+            } catch (error) {
+                if (active) {
+                    setLoadError(error.message || "Unable to load cases");
+                }
+                console.error("Cases loader error:", error);
+            } finally {
+                if (active) setIsLoading(false);
+            }
+        };
+
+        fetchCases();
+        return () => {
+            active = false;
+        };
+    }, []);
+
     
     // 2. DRAFT Filter States (What the dropdowns show)
     const [selectedStatus, setSelectedStatus] = useState("ALL");
